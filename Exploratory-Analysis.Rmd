@@ -1,0 +1,217 @@
+---
+title: "Práctica Análisis Exploratorio R. VOLUNTARIA."
+author: "Sergio Benito Martín"
+framework: deckjs
+output: html_document
+hitheme: solarized_light
+job: Data Scientist Student
+knit: slidify::knit2slides
+mode: selfcontained
+highlighter: highlight.js
+subtitle: 14/12/2018
+deckjs:
+  theme: web-2.0
+widgets: []
+
+---
+
+## ÍNDICE
+
+* 1. Introducción con el objetivo del análisis
+* 2. Carga de los datos
+* 3. Análisis descriptivo
+* 4. Análisis exploratorio
+* 5. Conclusiones
+
+© 2018 Sergio Benito Martín
+
+Todos los derechos reservados
+
+---
+
+# 1. Introducción con el objetivo del análisis
+
+---
+
+## Objetivo del análisis
+
+En este análisis se tratará de comprobar que aquellos alumnos tanto de matemáticas como de portugués que tienen más actividades que hacer o menor tiempo libre, son más eficientes en sus estudios y por lo tanto tienen unas notas superiores al resto.
+
+---
+
+# 2. Carga de los datos
+
+---
+
+## Carga de librerías utilizadas
+
+```{r cargalibrerias, echo=FALSE, results='hide', message=FALSE, warning=FALSE, error=FALSE}
+libs <- c("data.table","datasets","plyr", "dplyr", "gplots", "knitr", "stringr", "tidyr", "Hmisc", "corrplot")
+
+for (i in libs){
+    print(i)
+    if(!require(i, character.only = TRUE))
+    { install.packages(i, dependencies=TRUE); library(i) }
+}
+```
+```{r mostrarpaquetes, echo=FALSE, results='hold'}
+for (i in libs){
+    print(i)
+}
+```
+
+---
+
+## Configuración del path
+
+Comprobamos si está creado el path donde se almacenarán los datos
+
+```{r inicializacionpaths}
+setwd("exploratory-analysis")
+pathData <- "./datos/"
+```
+
+```{r creardir, echo=TRUE, results='asis', message=FALSE, warning=FALSE, error=FALSE}
+if (!file.exists(pathData)) {
+                 dir.create(pathData)
+}
+```
+
+---
+
+## Descarga de los datos
+
+Descargamos el dataset para almacenarlo en el directorio que hemos preparado para ello.
+
+```{r downloadfile, echo=TRUE, results='asis', message=FALSE, warning=FALSE, error=FALSE}
+fileUrl <- "https://archive.ics.uci.edu/ml/machine-learning-databases/00320/student.zip"
+pathFile <- paste(pathData, "student.zip", sep = "")
+download.file(fileUrl, destfile=pathFile, method="curl")
+rm(fileUrl)
+unzip(pathFile, exdir=pathData)
+list.files(pathData)
+fechaDescarga <- date()
+fechaDescarga
+```
+
+---
+
+## Carga de datasets (1/2)
+
+Procedemos a cargar en un data.table el dataset _"student-mat.csv"_
+
+``` {r cargastudentmat, echo=FALSE, results='hide'}
+dtStudentMat <- fread(paste(pathData, "student-mat.csv", sep=""))
+```
+``` {r muestrastudentmat, echo=FALSE, results='asis', message=FALSE, warning=FALSE, error=FALSE, fig.width=8, fig.height=5}
+
+dtStudentMat[,1:5] %>% head(5) %>% kable() %>% textplot()
+
+```
+
+---
+
+## Carga de datasets (2/2)
+
+Procedemos a cargar en un data.table el dataset _"student-por.csv"_
+
+``` {r cargastudentpor, echo=FALSE, results='hide'}
+dtStudentPor <- fread(paste(pathData, "student-por.csv", sep=""))
+```
+
+``` {r muestrastudentpor, echo=FALSE, results='asis', message=FALSE, warning=FALSE, error=FALSE, fig.width=8, fig.height=5}
+
+dtStudentPor[,1:5] %>% head(5) %>% kable() %>% textplot()
+
+```
+
+---
+
+# 3. Análisis descriptivo
+
+---
+
+## Lectura y transformación de los datos del fichero diccionario "student.txt"
+
+```{r cargaatributos, echo=TRUE, results='hide', message=FALSE, warning=FALSE, error=FALSE}
+
+# Leemos las líneas de student.txt que contienen números al comienzo de la misma, es decir
+# en las que explica un atributo del dataset
+ficheroAtributos <- grep("^[0-9]",  readr::read_lines(paste(pathData, "student.txt", sep = "")), value=TRUE)
+
+col1 <- lapply(strsplit(ficheroAtributos, "-"), function(x)x[1]) %>% # Eliminamos el guión
+  str_replace(pattern = "[[:digit:]]*\\s", replacement = "") # Eliminamos los números que comienzan al principio de la línea del atributo ya que no nos interesan
+
+# Separamos los datos de la descripción, utilizando como caracter separador el guión
+col2 <- lapply(strsplit(ficheroAtributos, "-"), function(x)x[2])
+col3 <- lapply(strsplit(ficheroAtributos, "-"), function(x)x[3])
+col4 <- lapply(strsplit(ficheroAtributos, "-"), function(x)x[4])
+
+dtFicheroAtributos <- data.table(Atributo=col1, Descripcion=col2, d2=col3, d3=col4)
+atributos <- unite(dtFicheroAtributos, "Descripcion", c(Descripcion, d2, d3), sep = "-")
+
+# Eliminamos los espacios en blanco que hayan quedado a ambos lados de cada cadena
+atributos$Atributo <- lapply(atributos$Atributo, function(x)str_trim(string=x, side = "both"))
+atributos$Descripcion <- lapply(atributos$Descripcion, function(x)str_trim(string=x, side = "both"))
+
+# Analizamos los atributos que nos interesan para nuestro estudio
+# paid, activities, romantic, famrel, freetime, goout, G1, G2, G3
+atributosAnalisis <- c("paid", "activities", "romantic", "famrel", "freetime", "goout", "G1", "G2", "G3")  
+
+# Filtramos las filas de los atributos que deseamos mostrar
+atributos %>% filter(atributos$Atributo %in% atributosAnalisis)
+
+```
+
+---
+
+## Atributos de los datasets "student-mat" y "student-por"
+
+``` {r listadoatributos, echo=FALSE, results='asis', message=FALSE, warning=FALSE, error=FALSE}
+
+#atributos %>% head(5) %>% kable() %>% textplot()
+atributos %>% head(5) %>% kable()
+```
+
+---
+
+# 4. Análisis exploratorio
+
+---
+
+## Hacemos un join de ambos datasets
+
+```{r joindt, echo=FALSE, results="hold", message=FALSE, warning=FALSE, error=FALSE}
+dtStudentMatPor <- dtStudentMat %>%
+        inner_join(dtStudentPor,
+                   c("school", "sex", "age", "address", "famsize", "Pstatus", "Medu", "Fedu", "Mjob", "Fjob", "reason", "guardian", "traveltime", "studytime", "failures", "schoolsup", "famsup", "paid", "activities", "nursery", "higher", "internet", "romantic", "famrel", "freetime", "goout", "Dalc", "Walc", "health"))
+
+dtStudentMatPor %>% head(5)
+```
+
+```{r joinfactor, echo=FALSE, results="hide", message=FALSE, warning=FALSE, error=FALSE}
+dtStudentMatPor$paid <- as.factor(dtStudentMatPor$paid)
+dtStudentMatPor$activities <- as.factor(dtStudentMatPor$activities)
+dtStudentMatPor$romantic <- as.factor(dtStudentMatPor$romantic)
+```
+
+---
+
+## Correlación entre variables
+
+Se comprueba la correlación entre las variables estudiadas, en este caso aquellas que hacen a los estudiantes de ambos cursos tener poco tiempo disponible para estudiar.
+
+```{r analisiscorr, echo=FALSE, results="asis", message=FALSE, warning=FALSE, error=FALSE}
+
+correlacion <- dtStudentMatPor %>% select("famrel", "freetime", "goout", "G1.x", "G2.x", "G3.x", "G1.y", "G2.y", "G3.y") %>% cor() %>% round(1)
+
+corrplot(correlacion, method="number", type="upper")
+```
+
+---
+
+## 5. Conclusiones
+
+Se puede comprobar en la figura anterior que, al tener una baja correlación entre las variables, con los resultados de las notas y las demás no se podría dar por concluido el análisis ya que no es concluyente obtener unos resultados académicos altos y tener poco tiempo disponible para el estudio.
+
+---

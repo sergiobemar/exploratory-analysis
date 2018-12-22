@@ -1,0 +1,15 @@
+base
+data.table
+plyr
+dplyr
+gplots
+knitr
+stringr
+tidyr
+lattice
+survival
+Formula
+ggplot2
+Hmisc
+corrplot
+bindrcpp
